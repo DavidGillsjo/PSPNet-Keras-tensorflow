@@ -5,6 +5,11 @@ from keras.models import Model
 from cityscapes_labels import trainId2label
 from ade20k_labels import ade20k_id2label
 from pascal_voc_labels import voc_id2label
+import csv
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 
 
 def class_image_to_image(class_id_image, class_id_to_rgb_map):
@@ -67,3 +72,54 @@ def print_activation(model, layer_name, data):
 def array_to_str(a):
     return "{} {} {} {} {}".format(a.dtype, a.shape, np.min(a),
                                    np.max(a), np.mean(a))
+
+def write_text_legend(model_name, fpath):
+    if 'cityscapes' in model_name:
+        my_label_dict = trainId2label
+    elif 'voc' in model_name:
+        my_label_dict = voc_id2label
+    elif 'ade20k' in model_name:
+        my_label_dict = ade20k_id2label
+    else:
+        return
+
+    with open(fpath, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['ID', 'Name', 'R', 'G', 'B'])
+        for l_id in sorted(my_label_dict.keys()):
+            writer.writerow([my_label_dict[l_id].id,
+                             my_label_dict[l_id].name] +
+                             list(my_label_dict[l_id].color))
+
+def write_image_legend(model_name, fpath, label_ids = []):
+    if 'cityscapes' in model_name:
+        my_label_dict = trainId2label
+    elif 'voc' in model_name:
+        my_label_dict = voc_id2label
+    elif 'ade20k' in model_name:
+        my_label_dict = ade20k_id2label
+    else:
+        return
+
+    # labels_ids = [] means all labels
+    my_ids = label_ids if label_ids else my_label_dict.keys()
+    my_ids = sorted(my_ids)
+    N = len(my_ids)
+    box_h = 100
+    box_w = box_h*10
+    im = np.zeros([N*box_h, box_w, 3], dtype=np.uint8)
+
+    # Color image
+    for m, mid in enumerate(my_ids):
+        im[m*box_h:(m+1)*box_h, :, :] = my_label_dict[mid].color
+
+    #Add text
+    fg = plt.figure(figsize=(16,10), dpi = 200, tight_layout=True)
+    plt.axis("off")
+    plt.imshow(im)
+    for m, mid in enumerate(my_ids):
+        plt.text(10, m*box_h + box_h*0.9, my_label_dict[mid].name, size=7*box_h/N, color='white')
+
+    #Save
+    fg.savefig(fpath)
+    plt.close(fg)

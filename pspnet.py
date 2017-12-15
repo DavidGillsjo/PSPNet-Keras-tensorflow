@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import os
-from os.path import splitext, join, isfile, isdir, basename
+from os.path import splitext, join, isfile, isdir, basename, split, dirname, realpath
 import argparse
 import numpy as np
-from scipy import misc, ndimage
+from scipy import misc, ndimage, io
 from keras import backend as K
 from keras.models import model_from_json, load_model
 import tensorflow as tf
@@ -16,6 +16,8 @@ from keras.utils.generic_utils import CustomObjectScope
 
 # These are the means for the ImageNet pretrained ResNet
 DATA_MEAN = np.array([[[123.68, 116.779, 103.939]]])  # RGB order
+
+_script_dir_ = dirname(realpath(__file__))
 
 
 class PSPNet(object):
@@ -158,11 +160,14 @@ if __name__ == "__main__":
     parser.add_argument('--input_size', type=int, default=500)
     parser.add_argument('-f', '--flip', type=bool, default=True,
                         help="Whether the network should predict on both image and flipped image.")
-
+    parser.add_argument('-nl', '--no_legend', dest='save_legend', action='store_false',
+                        help="Skip creating legend and do not save label information with the output.")
+    parser.add_argument('-nm', '--no_matlab', dest='save_matlab', action='store_false',
+                        help="Skip creating storing matlab output.")
     args = parser.parse_args()
 
     # Handle input and output args
-    images = glob(args.glob_path) if args.glob_path else [args.input_path,]
+    images = sorted(glob(args.glob_path)) if args.glob_path else [args.input_path,]
     if args.glob_path:
         fn, ext = splitext(args.output_path)
         if ext:
@@ -170,11 +175,22 @@ if __name__ == "__main__":
         if not isdir(args.output_path):
             os.mkdir(args.output_path)
 
+        output_folder = args.output_path
+    else:
+        output_folder, _ = split(args.output_path)
+
+    if args.save_legend:
+        utils.write_text_legend(args.model, join(output_folder, "id2label.csv"))
+        utils.write_image_legend(args.model, join(output_folder, "legend.jpg"))
+
     # Predict
     os.environ["CUDA_VISIBLE_DEVICES"] = args.id
 
     sess = tf.Session()
     K.set_session(sess)
+
+    # Track labels
+    present_labels = set()
 
     with sess.as_default():
         print(args)
@@ -206,9 +222,11 @@ if __name__ == "__main__":
             cm = np.argmax(probs, axis=2)
             pm = np.max(probs, axis=2)
 
-            color_cm = utils.add_color(cm)
+            color_cm = utils.add_color(cm, num_classes=probs.shape[2])
             # color cm is [0.0-1.0] img is [0-255]
             alpha_blended = 0.5 * color_cm * 255 + 0.5 * img
+
+            present_labels = present_labels.union(np.unique(cm.flat))
 
             if args.glob_path:
                 input_filename, ext = splitext(basename(img_path))
@@ -220,3 +238,13 @@ if __name__ == "__main__":
             misc.imsave(filename + "_seg" + ext, color_cm)
             misc.imsave(filename + "_probs" + ext, pm)
             misc.imsave(filename + "_seg_blended" + ext, alpha_blended)
+
+            if args.save_matlab:
+                io.savemat(filename,
+                           {'label_img': cm, 'prob_img': pm},
+                           do_compression=True)
+
+        if args.save_legend:
+            utils.write_image_legend(args.model,
+                                     join(output_folder, "legend.jpg"),
+                                     label_ids=present_labels)
