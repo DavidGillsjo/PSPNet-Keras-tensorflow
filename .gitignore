@@ -6,3 +6,4 @@
 *.h5
 *.json
 output/
+__pycache__
