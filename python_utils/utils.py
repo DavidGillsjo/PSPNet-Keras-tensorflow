@@ -39,10 +39,10 @@ def color_class_image(class_image, model_name):
     return colored_image
 
 
-def add_color(img, num_classes=32):
+def add_color(img, num_classes=151):
     h, w = img.shape
     img_color = np.zeros((h, w, 3))
-    for i in range(1, 151):
+    for i in range(0, num_classes):
         img_color[img == i] = to_color(i)
     img_color[img == num_classes] = (1.0, 1.0, 1.0)
     return img_color
@@ -50,7 +50,7 @@ def add_color(img, num_classes=32):
 
 def to_color(category):
     """Map each category color a good distance away from each other on the HSV color space."""
-    v = (category - 1) * (137.5 / 360)
+    v = category * (137.5 / 360)
     return colorsys.hsv_to_rgb(v, 1, 1)
 
 
@@ -102,8 +102,8 @@ def write_image_legend(model_name, fpath, label_ids = []):
         return
 
     # labels_ids = [] means all labels
-    my_ids = label_ids if label_ids else my_label_dict.keys()
-    my_ids = sorted(my_ids)
+    all_ids =sorted(my_label_dict.keys())
+    my_ids = sorted(label_ids) if label_ids else all_ids
     N = len(my_ids)
     box_h = 100
     box_w = box_h*10
@@ -111,7 +111,7 @@ def write_image_legend(model_name, fpath, label_ids = []):
 
     # Color image
     for m, mid in enumerate(my_ids):
-        im[m*box_h:(m+1)*box_h, :, :] = my_label_dict[mid].color
+        im[m*box_h:(m+1)*box_h, :, :] = 255.0*np.array(to_color(all_ids.index(mid)))
 
     #Add text
     fg = plt.figure(figsize=(16,10), dpi = 200, tight_layout=True)
