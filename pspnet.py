@@ -44,7 +44,7 @@ class PSPNet(object):
             print('Load pre-trained weights')
             self.model = load_model(weights)
 
-    def predict(self, img, flip_evaluation=False):
+    def predict(self, img, flip_evaluation=False, do_rescale=True):
         """
         Predict segementation for an image.
 
@@ -63,7 +63,7 @@ class PSPNet(object):
 
         probs = self.feed_forward(img, flip_evaluation)
 
-        if img.shape[0:1] != self.input_shape:  # upscale prediction if necessary
+        if do_rescale and img.shape[0:1] != self.input_shape:  # upscale prediction if necessary
             h, w = probs.shape[:2]
             probs = ndimage.zoom(probs, (1. * h_ori / h, 1. * w_ori / w, 1.),
                                  order=1, prefilter=False)
@@ -164,6 +164,8 @@ if __name__ == "__main__":
                         help="Skip creating legend and do not save label information with the output.")
     parser.add_argument('-nm', '--no_matlab', dest='save_matlab', action='store_false',
                         help="Skip creating storing matlab output.")
+    parser.add_argument('-ns', '--no_rescale', dest='rescale', action='store_false',
+                        help="Skip rescaling image output.")
     args = parser.parse_args()
 
     # Handle input and output args
@@ -215,16 +217,16 @@ if __name__ == "__main__":
         for i, img_path in enumerate(images):
             print("Processing image {} / {}".format(i+1,len(images)))
             img = misc.imread(img_path, mode='RGB')
-            cimg = misc.imresize(img, (args.input_size, args.input_size))
+            cimg = img if args.rescale else misc.imresize(img, pspnet.input_shape)
 
-            probs = pspnet.predict(img, args.flip)
+            probs = pspnet.predict(img, args.flip, args.rescale)
 
             cm = np.argmax(probs, axis=2)
             pm = np.max(probs, axis=2)
 
             color_cm = utils.add_color(cm, num_classes=probs.shape[2])
             # color cm is [0.0-1.0] img is [0-255]
-            alpha_blended = 0.5 * color_cm * 255 + 0.5 * img
+            alpha_blended = 0.5 * color_cm * 255 + 0.5 * cimg
 
             present_labels = present_labels.union(np.unique(cm.flat))
 
